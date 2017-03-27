@@ -16,7 +16,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
-import java.lang.reflect.Array;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -26,7 +26,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-//import Jama
 
 import Jama.Matrix;
 import code.source.es.newbluetooth.R;
@@ -42,8 +41,8 @@ public class MeasureActivity extends AppCompatActivity{
 
     Button rssiButton;
     TextView rssiText, distanceText, coordinateText;
-    Map<String,ArrayList> m1 = new HashMap<String, ArrayList>();  //储存RSSI的map
-    Map<String,Double> m2 = new HashMap<String, Double>();     //过滤后的RSSI的Map
+    Map<String,ArrayList<String>> m1 = new HashMap<>();  //储存RSSI的map
+    Map<String,Double> m2 = new HashMap<>();     //过滤后的RSSI的Map
     Map<String,Double[]> bleDevLoc = new HashMap<>(); //固定节点的位置Map
     BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
@@ -55,26 +54,23 @@ public class MeasureActivity extends AppCompatActivity{
             BluetoothDevice remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
             String remoteMAC;
             final Short rssi;
-            Double n = 1.92;
-            ArrayList<String> listMac = new ArrayList<>();
             if(remoteDevice != null){
                 remoteMAC = remoteDevice.getAddress();
                     rssi = intent.getExtras().getShort(BluetoothDevice.EXTRA_RSSI);
                     if (!dFinished.equals(intent.getAction())) {
                         if (m1.containsKey(remoteMAC)) {
-                            ArrayList list1 = m1.get(remoteMAC);
+                            ArrayList<String> list1 = m1.get(remoteMAC);
                             list1.add(0, rssi.toString());
                             m1.put(remoteMAC, list1);
                         } else {
-                            ArrayList<String> list = new ArrayList<String>();
+                            ArrayList<String> list = new ArrayList<>();
                             list.add(rssi.toString());   //如果这个MAC地址没有出现过，建立list存储历次rssi
                             m1.put(remoteMAC, list);
                         }
                         Log.d("MAC", remoteMAC);
                         m2.put(remoteMAC, NormalDistribution(m1.get(remoteMAC)));   //更新MAC地址对应信号强度的map
-                        listMac = Sort(m2, BLE_CHOOSED_NUM);  //给m2中的值排序，输出排名前k的点
-                        ArrayList<String> coordinate = LeastSquares(m2, bleDevLoc,listMac);
-
+                        ArrayList<Double> coordinate = LeastSquares(m2, bleDevLoc);
+                        Log.d("coordinate",coordinate.toString());
                     }
             }
         }
@@ -128,7 +124,7 @@ public class MeasureActivity extends AppCompatActivity{
             }
         }
 
-        Double rssiValue = 0.0, staDev = 0.0, proLowLim , proHighLim ;  //rssiValue作为一个中间变量在多个计算过程中间使用
+        Double rssiValue, staDev, proLowLim , proHighLim ;  //rssiValue作为一个中间变量在多个计算过程中间使用
         Double avg = GetAvg(value);  //获取RSSI的平均值
         staDev = GetStaDev(value,avg);  //获取RSSI的方差
         proLowLim = 0.15 * staDev + avg;         //高概率区下界
@@ -156,7 +152,7 @@ public class MeasureActivity extends AppCompatActivity{
 
     //用来给ArrayLIst产生均值的函数
     private Double GetAvg(ArrayList list){
-        Double sum = 0.0, avg = 0.0;
+        Double sum = 0.0, avg;
         for(int i=0; i< list.size(); i++){
             sum += Double.valueOf(list.get(i).toString());
         }
@@ -180,7 +176,7 @@ public class MeasureActivity extends AppCompatActivity{
     //用来给map中的值排序
     public ArrayList<String> Sort(Map<String, Double> m2, int BLE_CHOOSED_NUM){
         List<Map.Entry<String, Double>> infoIds =
-                new ArrayList<Map.Entry<String, Double>>(m2.entrySet());
+                new ArrayList<>(m2.entrySet());
         ArrayList<String> list = new ArrayList<>();
         for (int i = 0; i < infoIds.size(); i++) {     //排序前
             String id = infoIds.get(i).toString();
@@ -193,38 +189,42 @@ public class MeasureActivity extends AppCompatActivity{
         });
         for (int i = 0; i < BLE_CHOOSED_NUM; i++) {        //排序完,取前K个
             String id = infoIds.get(i).toString();
-            list.add(id.split("\\=")[0]);   //string.split后变为字符串数组。
-            System.out.println(id.split("\\=")[0]);
+            list.add(id.split("=")[0]);   //string.split后变为字符串数组。
+            System.out.println(id.split("=")[0]);
         }
         Log.d("stop","stop");
         return list;     //应该是MAC地址的列表
     }
 
-    private ArrayList<Double> LeastSquares(Map<String, Double> m2, Map<String, ArrayList>bleDevLoc){    //最小二乘法实现定位
+    private ArrayList<Double> LeastSquares(Map<String, Double> m2, Map<String, Double[]>bleDevLoc){    //最小二乘法实现定位
         int k = 3;
-        Double xCor, yCor;
+        Double xCor = 0.0, yCor = 0.0, weightSum = 0.0;
         ArrayList<Double[]> loc = new ArrayList<>();
-        double[][] calEvenLoc = new double[BLE_CHOOSED_NUM-k+1][3];
-        ArrayList<String> listMac = Sort(m2, BLE_CHOOSED_NUM);  //给m2中的值排序，输出排名前4的点
+        ArrayList<Double> evenLoc = new ArrayList<>();
+        ArrayList<String> listMac = Sort(m2, BLE_CHOOSED_NUM);  //给m2中的值排序，输出排名前BLE_CHOOSED_NUM的点
         for(int i = 0; i < BLE_CHOOSED_NUM-k+1; i++){
-            loc.add(LeastSquaresCal(m2, bleDevLoc, listMac, i, k));
+            loc.add(LeastSquaresCal(m2, bleDevLoc, listMac, i, k));   //得到每k个蓝牙节点计算出来的坐标和平均信号强度
+            weightSum += loc.get(i)[2] + 100;
         }
         for(int i = 0; i < BLE_CHOOSED_NUM-k+1; i++){
-            xCor = loc.get(i)[0] / Math.abs(loc.get(i)[2]);   //加权之后的x
-            yCor = loc.get(i)[1] / Math.abs(loc.get(i)[2]);   //加权之后的y
+            xCor += (loc.get(i)[0]) * (loc.get(i)[2] + 100) / weightSum;   //加权之后的x
+            yCor += (loc.get(i)[1]) * (loc.get(i)[2] + 100) / weightSum;   //加权之后的y
         }
+        evenLoc.add(xCor);
+        evenLoc.add(yCor);
+        return evenLoc;
     }
 
-    private Double[] LeastSquaresCal(Map<String, Double> m2, Map<String,ArrayList>bleDevLoc, ArrayList<String> listMac,int i, int k){
+    private Double[] LeastSquaresCal(Map<String, Double> m2, Map<String,Double[]>bleDevLoc, ArrayList<String> listMac,int i, int k){
         double[][] bleDevLocArray = new double[k][6];   //储存节点位置信息的二维数组，6列：x，y，到本节点的RSSI,x方，y方，RSSI方
         double[][] Aarray = new double[k-1][2];
         double[][] barray = new double[k-1][2];
-        double avg = 0.0;
+        double avg ;
         ArrayList<Double> storeAndAvg = new ArrayList<>();     //开始储存RSSI，求出平均值后，储存x、y坐标、rssi平均值
         Double[] result = new Double[3];
         for(int j = 0 ; j < k ; j++){   //形成储存节点位置信息的二维数组
-            bleDevLocArray[j][0] = Double.valueOf(bleDevLoc.get(listMac.get(j + i)).get(1).toString());  //x
-            bleDevLocArray[j][1] = Double.valueOf(bleDevLoc.get(listMac.get(j + i)).get(2).toString());  //y
+            bleDevLocArray[j][0] = Double.valueOf(bleDevLoc.get(listMac.get(j + i))[0].toString());  //x
+            bleDevLocArray[j][1] = Double.valueOf(bleDevLoc.get(listMac.get(j + i))[1].toString());  //y
             bleDevLocArray[j][2] = rssiToDis(m2.get(listMac.get(j)));    //距离
             bleDevLocArray[j][3] = Math.pow(bleDevLocArray[j][0],2);     //x平方
             bleDevLocArray[j][4] = Math.pow(bleDevLocArray[j][1],2);     //y平方
