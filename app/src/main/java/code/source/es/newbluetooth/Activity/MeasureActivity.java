@@ -7,29 +7,22 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
-import android.support.annotation.AttrRes;
-import android.support.annotation.IntegerRes;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import Jama.Matrix;
 import code.source.es.newbluetooth.R;
-import code.source.es.newbluetooth.Service.ScanService;
+import code.source.es.newbluetooth.utils.FileCache;
 
 /**
  * Created by fanwe on 2017/3/13.
@@ -41,7 +34,7 @@ public class MeasureActivity extends AppCompatActivity{
     Double FLOOR_HEIGHT = 3.3, DEVICE_HEIGHT = 0.75;;
 
     Button rssiButton;
-    TextView rssiText, distanceText, coordinateText;
+    TextView rssiText, rssiText1, coordinateText;
     Map<String,ArrayList<String>> m1 = new HashMap<>();  //储存RSSI的map
     Map<String,Double> m2 = new HashMap<>();     //过滤后的RSSI的Map
     Map<String,Double[]> bleDevLoc = new HashMap<>(); //固定节点的位置Map
@@ -71,11 +64,19 @@ public class MeasureActivity extends AppCompatActivity{
                         }
                         Log.d("MAC", remoteMAC);
                         m2.put(remoteMAC, NormalDistribution(m1.get(remoteMAC)));   //更新MAC地址对应信号强度的map
-                        if (m2.size() > 4) {
-                            ArrayList<Double> coordinate = LeastSquares(m2, bleDevLoc);
-                            Log.d("coordinate", coordinate.toString());
-                        }
+//                        if (m2.size() > 4) {
+//                            ArrayList<Double> coordinate = LeastSquares(m2, bleDevLoc);
+//                            Log.d("coordinate", coordinate.toString());
+//                        }
                     }
+                    Thread thread = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            FileCache cache = new FileCache();
+                            cache.saveFile((m1.toString() + "\n"));
+                        }
+                    });
+                    thread.start();
                 }
             }
         }
@@ -87,7 +88,7 @@ public class MeasureActivity extends AppCompatActivity{
         setContentView(R.layout.activity_mea);
         rssiButton = (Button)findViewById(R.id.rssiButton);
         rssiText = (TextView)findViewById(R.id.rssiText);
-        distanceText = (TextView)findViewById(R.id.distanceText);
+        rssiText1 = (TextView)findViewById(R.id.rssiText1);
         coordinateText = (TextView)findViewById(R.id.coordinateText);
         initBluetooth();   //查看蓝牙是否打开，没有打开的话提醒用户打开
 
@@ -223,6 +224,7 @@ public class MeasureActivity extends AppCompatActivity{
         for(int i = 0; i < BLE_CHOOSED_NUM-k+1; i++){
             loc.add(LeastSquaresCal(m2, bleDevLoc, listMac, i, k));   //得到每k个蓝牙节点计算出来的坐标和平均信号强度
             weightSum += loc.get(i)[2] + 100 ;
+            Log.d("weightSum",weightSum.toString());
         }
         for(int i = 0; i < BLE_CHOOSED_NUM-k+1; i++){
             xCor += (loc.get(i)[0]) * (loc.get(i)[2] + 100) / weightSum;   //加权之后的x

@@ -17,9 +17,10 @@
 
 
     <TextView
+        android:id="@+id/rssiText1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="DISTANCE"
+        android:text="rssiText1"
         android:gravity="center"/>
     <TextView
         android:id="@+id/distanceText"

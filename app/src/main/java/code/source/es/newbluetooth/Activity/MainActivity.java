@@ -17,6 +17,7 @@ import android.widget.Button;
 
 import code.source.es.newbluetooth.R;
 import code.source.es.newbluetooth.Service.ScanService;
+import code.source.es.newbluetooth.utils.FileCache;
 
 import static code.source.es.newbluetooth.R.id.cancel_action;
 import static code.source.es.newbluetooth.R.id.sensorButton;
