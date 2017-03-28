@@ -38,6 +38,7 @@ import code.source.es.newbluetooth.Service.ScanService;
 public class MeasureActivity extends AppCompatActivity{
     private static final int ENABLE_BLUETOOTH = 1;
     int RSSI_LIMIT = 15, BLE_CHOOSED_NUM = 5;
+    Double FLOOR_HEIGHT = 3.3, DEVICE_HEIGHT = 0.75;;
 
     Button rssiButton;
     TextView rssiText, distanceText, coordinateText;
@@ -56,6 +57,7 @@ public class MeasureActivity extends AppCompatActivity{
             final Short rssi;
             if(remoteDevice != null){
                 remoteMAC = remoteDevice.getAddress();
+                if (bleDevLoc.containsKey(remoteMAC)) {
                     rssi = intent.getExtras().getShort(BluetoothDevice.EXTRA_RSSI);
                     if (!dFinished.equals(intent.getAction())) {
                         if (m1.containsKey(remoteMAC)) {
@@ -69,9 +71,12 @@ public class MeasureActivity extends AppCompatActivity{
                         }
                         Log.d("MAC", remoteMAC);
                         m2.put(remoteMAC, NormalDistribution(m1.get(remoteMAC)));   //更新MAC地址对应信号强度的map
-                        ArrayList<Double> coordinate = LeastSquares(m2, bleDevLoc);
-                        Log.d("coordinate",coordinate.toString());
+                        if (m2.size() > 4) {
+                            ArrayList<Double> coordinate = LeastSquares(m2, bleDevLoc);
+                            Log.d("coordinate", coordinate.toString());
+                        }
                     }
+                }
             }
         }
     };
@@ -85,14 +90,28 @@ public class MeasureActivity extends AppCompatActivity{
         distanceText = (TextView)findViewById(R.id.distanceText);
         coordinateText = (TextView)findViewById(R.id.coordinateText);
         initBluetooth();   //查看蓝牙是否打开，没有打开的话提醒用户打开
-        Double[] location = {2.5,12.1};
-        bleDevLoc.put("19:18:FC:00:82:90",location);
-        Double[] location1 = {6.2,11.1};
-        bleDevLoc.put("19:18:FC:00:82:98",location1);
-        Double[] location2 = {2.3,8.1};
-        bleDevLoc.put("19:18:FC:00:82:8F",location2);
-        Double[] location3 = {7.4, 5.1};
-        bleDevLoc.put("19:18:FC:00:82:86",location3);
+
+        Double[] location21 = {3.9,9.0};
+        Double[] location22 = {8.2,9.0};
+        Double[] location23 = {0.2, 5.0};
+        Double[] location24 = {4.2, 5.0};
+        Double[] location25 = {8.2, 5.0};
+        Double[] location26 = {12.2, 5.0};
+        Double[] location27 = {0.2, 1.0};
+        Double[] location28 = {4.2, 1.0};
+        Double[] location29 = {8.2, 1.0};
+        Double[] location30 = {12.2, 1.0};
+        bleDevLoc.put("19:18:FC:01:F1:0E",location21);
+        bleDevLoc.put("19:18:FC:01:F1:0F",location22);
+        bleDevLoc.put("19:18:FC:01:F0:F8",location23);
+        bleDevLoc.put("19:18:FC:01:F0:F9",location24);
+        bleDevLoc.put("19:18:FC:01:F0:FA",location25);
+        bleDevLoc.put("19:18:FC:01:F0:FB",location26);
+        bleDevLoc.put("19:18:FC:01:F0:FC",location27);
+        bleDevLoc.put("19:18:FC:01:F0:FD",location28);
+        bleDevLoc.put("19:18:FC:01:F0:FE",location29);
+        bleDevLoc.put("19:18:FC:01:F0:FF",location30);
+
         startDiscovery(); //开启扫描模式
     }
 
@@ -108,10 +127,9 @@ public class MeasureActivity extends AppCompatActivity{
         if(bluetoothAdapter.isEnabled() && !bluetoothAdapter.isDiscovering())
             bluetoothAdapter.startDiscovery();
         registerReceiver(mReceiver, new IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED));
-//        Log.d("open discovery", "success");
     }
 
-    //  更新对应MAC地址对应的过滤后RSSI值的平均值。
+    //  对应MAC地址对应的过滤后RSSI的平均值，过滤使用高斯分布
     private Double NormalDistribution(ArrayList m1){
         ArrayList<String> value = new ArrayList<>();
         if(m1.size() > RSSI_LIMIT){             //截取长度合适RSSI字符串,长于15时截取前15个
@@ -129,9 +147,8 @@ public class MeasureActivity extends AppCompatActivity{
         staDev = GetStaDev(value,avg);  //获取RSSI的方差
         proLowLim = 0.15 * staDev + avg;         //高概率区下界
         proHighLim = 3.09 * staDev + avg;        //高概率区上界
-
-        Log.d("value", value.toString());
-        Log.d("staDev", staDev.toString());
+//        Log.d("value", value.toString());
+//        Log.d("staDev", staDev.toString());
 
         for (int i = 0; i < value.size(); i++) {          //去掉value中的低概率RSSI
             rssiValue = Double.valueOf(value.get(i));
@@ -142,9 +159,9 @@ public class MeasureActivity extends AppCompatActivity{
         }
         if(value.size() != 0) {
             avg = GetAvg(value);               //重新获取RSSI的平均值
-            staDev = GetStaDev(value, avg);   //重新获取RSSI的标准差
-            Log.d("value", value.toString());
-            Log.d("staDev", staDev.toString());
+//            staDev = GetStaDev(value, avg);   //重新获取RSSI的标准差
+//            Log.d("value", value.toString());
+//            Log.d("staDev", staDev.toString());
         }
         return avg;
     }
@@ -178,22 +195,23 @@ public class MeasureActivity extends AppCompatActivity{
         List<Map.Entry<String, Double>> infoIds =
                 new ArrayList<>(m2.entrySet());
         ArrayList<String> list = new ArrayList<>();
+        int limit = BLE_CHOOSED_NUM < m2.size() ? BLE_CHOOSED_NUM:m2.size();
         for (int i = 0; i < infoIds.size(); i++) {     //排序前
             String id = infoIds.get(i).toString();
             System.out.println(id);
         }
         Collections.sort(infoIds, new Comparator<Map.Entry<String, Double>>() {        //排序
             public int compare(Map.Entry<String, Double> o1, Map.Entry<String, Double> o2) {
-                return o1.getValue().compareTo(o2.getValue());
+                return  o2.getValue().compareTo(o1.getValue());
+//                return o1.getValue() > o2.getValue() ? -1:1;
             }
         });
-        for (int i = 0; i < BLE_CHOOSED_NUM; i++) {        //排序完,取前K个
+        for (int i = 0; i < limit; i++) {        //排序完,取前limit个
             String id = infoIds.get(i).toString();
             list.add(id.split("=")[0]);   //string.split后变为字符串数组。
-            System.out.println(id.split("=")[0]);
+            System.out.println(id);
         }
-        Log.d("stop","stop");
-        return list;     //应该是MAC地址的列表
+        return list;     //排序好的MAC地址的列表
     }
 
     private ArrayList<Double> LeastSquares(Map<String, Double> m2, Map<String, Double[]>bleDevLoc){    //最小二乘法实现定位
@@ -204,7 +222,7 @@ public class MeasureActivity extends AppCompatActivity{
         ArrayList<String> listMac = Sort(m2, BLE_CHOOSED_NUM);  //给m2中的值排序，输出排名前BLE_CHOOSED_NUM的点
         for(int i = 0; i < BLE_CHOOSED_NUM-k+1; i++){
             loc.add(LeastSquaresCal(m2, bleDevLoc, listMac, i, k));   //得到每k个蓝牙节点计算出来的坐标和平均信号强度
-            weightSum += loc.get(i)[2] + 100;
+            weightSum += loc.get(i)[2] + 100 ;
         }
         for(int i = 0; i < BLE_CHOOSED_NUM-k+1; i++){
             xCor += (loc.get(i)[0]) * (loc.get(i)[2] + 100) / weightSum;   //加权之后的x
@@ -215,51 +233,54 @@ public class MeasureActivity extends AppCompatActivity{
         return evenLoc;
     }
 
+    //每三个点实现一次定位，返回计算出来的坐标值和平均信号强度（作为权值）
     private Double[] LeastSquaresCal(Map<String, Double> m2, Map<String,Double[]>bleDevLoc, ArrayList<String> listMac,int i, int k){
         double[][] bleDevLocArray = new double[k][6];   //储存节点位置信息的二维数组，6列：x，y，到本节点的RSSI,x方，y方，RSSI方
         double[][] Aarray = new double[k-1][2];
         double[][] barray = new double[k-1][2];
-        double avg ;
         ArrayList<Double> storeAndAvg = new ArrayList<>();     //开始储存RSSI，求出平均值后，储存x、y坐标、rssi平均值
         Double[] result = new Double[3];
         for(int j = 0 ; j < k ; j++){   //形成储存节点位置信息的二维数组
             bleDevLocArray[j][0] = Double.valueOf(bleDevLoc.get(listMac.get(j + i))[0].toString());  //x
             bleDevLocArray[j][1] = Double.valueOf(bleDevLoc.get(listMac.get(j + i))[1].toString());  //y
-            bleDevLocArray[j][2] = rssiToDis(m2.get(listMac.get(j)));    //距离
+            bleDevLocArray[j][2] = rssiToDis(m2.get(listMac.get(j + i)));    //距离  m2<MAC地址，信号强度>
             bleDevLocArray[j][3] = Math.pow(bleDevLocArray[j][0],2);     //x平方
             bleDevLocArray[j][4] = Math.pow(bleDevLocArray[j][1],2);     //y平方
             bleDevLocArray[j][5] = Math.pow(bleDevLocArray[j][2],2);     //距离平方
-            storeAndAvg.add(Double.valueOf(m2.get(listMac.get(j)).toString()));
+            storeAndAvg.add(Double.valueOf(m2.get(listMac.get(j + i)).toString()));
         }
-        for(int j = i; j < i + k; j++){
-            Aarray[j][0] = 2 * (bleDevLocArray[j][0] - bleDevLocArray[k][0]);
-            Aarray[j][1] = 2 * (bleDevLocArray[j][1] - bleDevLocArray[k][1]);
+        for(int j = 0; j < k - 1; j++){
+            Aarray[j][0] = 2 * (bleDevLocArray[j][0] - bleDevLocArray[k-1][0]);
+            Aarray[j][1] = 2 * (bleDevLocArray[j][1] - bleDevLocArray[k-1][1]);
             barray[j][0] = bleDevLocArray[j][3] + bleDevLocArray[j][4] - bleDevLocArray[j][5] - bleDevLocArray[k-1][3] - bleDevLocArray[k-1][4] - bleDevLocArray[k-1][5];
             barray[j][1] = 0;
         }
         Matrix A = new Matrix(Aarray);
         Matrix b = new Matrix(barray);
-        Matrix resultMatrix = (A.transpose().times(A)).inverse().times(A.transpose()).times(b);
-        avg = GetAvg(storeAndAvg);     //计算RSSI的平均值，作为加权的依据。
-        result[0] = resultMatrix.get(0,0);   //x坐标
-        result[1] = resultMatrix.get(1,0);   //y坐标
-        result[2] = avg;  //rssi平均值
-        return result;
+//        Log.d("A", A.getColumnPackedCopy().toString());
+        if(A.det() == 0){
+            Log.d("Matrix","singular Matrix");
+            result[0] = 0.0;
+            result[1] = 0.0;
+            result[2] = 0.0;
+            return result;
+        }else {
+            Matrix A_inverse = A.inverse();
+            Matrix resultMatrix1 = A.transpose().times(A);
+            Matrix resultMatrix2 = resultMatrix1.inverse();
+            Matrix resultMatrix3 = resultMatrix2.times(A_inverse);
+            Matrix resultMatrix = (A.transpose().times(A)).inverse().times(A.transpose()).times(b);
+            result[0] = resultMatrix.get(0, 0);   //x坐标
+            result[1] = resultMatrix.get(1, 0);   //y坐标
+            result[2] = GetAvg(storeAndAvg);  //计算RSSI的平均值，作为加权的依据。
+            return result;
+        }
     }
 
     private double rssiToDis(double rssi){     //rssi到距离转化的函数
-        return Math.pow(10.0, (rssi +52.393) / (-19.2));
+        Double directDistance = Math.pow(10.0, (rssi +52.393) / (-19.2));
+        directDistance = Math.sqrt(Math.pow(directDistance, 2) - Math.pow(FLOOR_HEIGHT - DEVICE_HEIGHT, 2));
+        return directDistance;
     }
 
-    /*
-    private Double triangle(Map<String,Double> m2, ArrayList<String> listMac){
-        Double n;
-        Map<String,ArrayList> mac_Location = new HashMap<>();
-        for (int i = 0; i < 3; i++){
-            mac_Location.put(listMac.get(i),bleDevLoc.get(listMac.get(i)));
-        }
-        for
-        return n;
-    }
-    */
 }
