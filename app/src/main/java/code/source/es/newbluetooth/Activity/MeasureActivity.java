@@ -35,7 +35,7 @@ public class MeasureActivity extends AppCompatActivity{
 
     Button rssiButton;
     TextView rssiText, rssiText1, coordinateText;
-    Map<String,ArrayList<String>> m1 = new HashMap<>();  //储存RSSI的map
+    Map<String,ArrayList<Double>> m1 = new HashMap<>();  //储存RSSI的map
     Map<String,Double> m2 = new HashMap<>();     //过滤后的RSSI的Map
     Map<String,Double[]> bleDevLoc = new HashMap<>(); //固定节点的位置Map
     BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -50,33 +50,33 @@ public class MeasureActivity extends AppCompatActivity{
             final Short rssi;
             if(remoteDevice != null){
                 remoteMAC = remoteDevice.getAddress();
-                if (bleDevLoc.containsKey(remoteMAC)) {
+                if (remoteMAC.equals("19:18:FC:01:F1:0F")) {
                     rssi = intent.getExtras().getShort(BluetoothDevice.EXTRA_RSSI);
                     if (!dFinished.equals(intent.getAction())) {
                         if (m1.containsKey(remoteMAC)) {
-                            ArrayList<String> list1 = m1.get(remoteMAC);
-                            list1.add(0, rssi.toString());
+                            ArrayList<Double> list1 = m1.get(remoteMAC);
+                            list1.add(0, (double)rssi);
                             m1.put(remoteMAC, list1);
                         } else {
-                            ArrayList<String> list = new ArrayList<>();
-                            list.add(rssi.toString());   //如果这个MAC地址没有出现过，建立list存储历次rssi
+                            ArrayList<Double> list = new ArrayList<>();
+                            list.add((double)rssi);   //如果这个MAC地址没有出现过，建立list存储历次rssi
                             m1.put(remoteMAC, list);
                         }
-                        Log.d("MAC", remoteMAC);
+//                        Log.d("MAC", remoteMAC);
                         m2.put(remoteMAC, NormalDistribution(m1.get(remoteMAC)));   //更新MAC地址对应信号强度的map
 //                        if (m2.size() > 4) {
 //                            ArrayList<Double> coordinate = LeastSquares(m2, bleDevLoc);
 //                            Log.d("coordinate", coordinate.toString());
 //                        }
                     }
-                    Thread thread = new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            FileCache cache = new FileCache();
-                            cache.saveFile((m1.toString() + "\n"));
-                        }
-                    });
-                    thread.start();
+//                    Thread thread = new Thread(new Runnable() {
+//                        @Override
+//                        public void run() {
+//                            FileCache cache = new FileCache();
+//                            cache.saveFile((m1.toString() + "\n"));
+//                        }
+//                    });
+//                    thread.start();
                 }
             }
         }
@@ -131,64 +131,59 @@ public class MeasureActivity extends AppCompatActivity{
     }
 
     //  对应MAC地址对应的过滤后RSSI的平均值，过滤使用高斯分布
-    private Double NormalDistribution(ArrayList m1){
-        ArrayList<String> value = new ArrayList<>();
-        if(m1.size() > RSSI_LIMIT){             //截取长度合适RSSI字符串,长于15时截取前15个
+    private Double NormalDistribution(ArrayList<Double> m1list){
+        ArrayList<Double> value = new ArrayList<>();
+        if( m1list.size() > RSSI_LIMIT){             //截取长度合适RSSI字符串,长于15时截取前15个
             for (int i = 0; i <RSSI_LIMIT ; i++){
-                value.add(m1.get(i).toString());
+                value.add(m1list.get(i));
             }
         }else {
-            for (int i = 0; i < m1.size(); i++) { //截取长度合适RSSI字符串，短于15时全部复制
-                value.add(m1.get(i).toString());
+            for (int i = 0; i < m1list.size(); i++) { //截取长度合适RSSI字符串，短于15时全部复制
+                value.add(m1list.get(i));
             }
         }
 
-        Double rssiValue, staDev, proLowLim , proHighLim ;  //rssiValue作为一个中间变量在多个计算过程中间使用
+        Double rssiValue = 0.0, staDev, proLowLim , proHighLim, pdfAltered ;  //rssiValue作为一个中间变量在多个计算过程中间使用
+
         Double avg = GetAvg(value);  //获取RSSI的平均值
-        staDev = GetStaDev(value,avg);  //获取RSSI的方差
-        proLowLim = 0.15 * staDev + avg;         //高概率区下界
-        proHighLim = 3.09 * staDev + avg;        //高概率区上界
-//        Log.d("value", value.toString());
-//        Log.d("staDev", staDev.toString());
+//        staDev = GetStaDev(value,avg);  //获取RSSI的标准差
+//        proLowLim = 0.15 * staDev + avg;         //高概率区下界
+//        proHighLim = 3.09 * staDev + avg;        //高概率区上界
 
-        for (int i = 0; i < value.size(); i++) {          //去掉value中的低概率RSSI
-            rssiValue = Double.valueOf(value.get(i));
-            if ((proHighLim < rssiValue) || (rssiValue < proLowLim)) {
-                value.remove(i);                              //删除不在高概率区域内的数据
-                i -= 1;
+        String rssiTextString = value.toString() + "\n" + avg;
+        rssiText.setText(rssiTextString);
+        Log.d("rssiText",value.toString());
+        Log.d("AVG",avg.toString());
+
+        ArrayList<Double> logarNormalList = GetLogarNormalList(value);
+        avg = GetAvg(logarNormalList);
+        staDev = GetStaDev(logarNormalList, avg, "logarNormal");
+        proLowLim = 0.6;         //高概率区下界
+        proHighLim = 1.0;        //高概率区上界
+
+        for (int i = 0; i < logarNormalList.size(); i++) {          //去掉value中的低概率RSSI
+            if (staDev !=0) {
+                Double exponent = -Math.pow(logarNormalList.get(i) - avg, 2) / (2 * Math.pow(staDev, 2));
+                pdfAltered = Math.exp(exponent) * avg / (0 - value.get(i));
+                Log.d("exponent", exponent.toString());
+                Log.d("pdf", pdfAltered.toString());
+                if (pdfAltered < proLowLim) {
+                    logarNormalList.remove(i);                              //删除不在高概率区域内的数据
+                    i -= 1;
+                }
             }
         }
+
         if(value.size() != 0) {
-            avg = GetAvg(value);               //重新获取RSSI的平均值
-//            staDev = GetStaDev(value, avg);   //重新获取RSSI的标准差
-//            Log.d("value", value.toString());
-//            Log.d("staDev", staDev.toString());
+            avg = GetAvg(logarNormalList);               //重新获取RSSI的平均值
+            rssiValue = 0 - Math.exp(avg);
         }
-        return avg;
-    }
+        String rssiTextString1 = logarNormalList.toString() + "\n" + rssiValue.toString();
+        rssiText1.setText(rssiTextString1);
+        Log.d("rssiText1",logarNormalList.toString());
+        Log.d("AVG",rssiValue.toString());
 
-
-    //用来给ArrayLIst产生均值的函数
-    private Double GetAvg(ArrayList list){
-        Double sum = 0.0, avg;
-        for(int i=0; i< list.size(); i++){
-            sum += Double.valueOf(list.get(i).toString());
-        }
-        avg = sum / list.size();
-        return avg;
-    }
-
-    //用来给ArrayList产生标准差的函数
-    private Double GetStaDev(ArrayList list, Double avg){
-        Double stadardDev = 0.0;
-        if (list.size() >1) {
-            for (int i = 0; i < list.size(); i++) {
-                stadardDev += Math.pow((Double.valueOf(list.get(i).toString()) - avg), 2);
-            }
-            stadardDev = Math.sqrt(stadardDev / (list.size() - 1));
-//            Log.d("staDev",stadardDev.toString());
-        }
-        return stadardDev;
+        return rssiValue;
     }
 
     //用来给map中的值排序
@@ -278,6 +273,43 @@ public class MeasureActivity extends AppCompatActivity{
             return result;
         }
     }
+
+
+    //用来给ArrayLIst产生均值的函数
+    private Double GetAvg(ArrayList<Double> list){
+        Double sum = 0.0, avg;
+        for(int i=0; i< list.size(); i++){
+            sum += list.get(i);
+        }
+        avg = sum / list.size();
+        return avg;
+    }
+
+    //用来给ArrayList产生标准差的函数
+    private Double GetStaDev(ArrayList<Double> list, Double avg, String distribution){
+        Double stadardDev = 0.0;
+        if (list.size() >1) {
+            for (int i = 0; i < list.size(); i++) {
+                stadardDev += Math.pow((list.get(i) - avg), 2);
+            }
+            if(distribution.equals("logarNormal"))
+                stadardDev = Math.sqrt(stadardDev / list.size());
+            else
+                stadardDev = Math.sqrt(stadardDev / (list.size() - 1));
+//            Log.d("staDev",stadardDev.toString());
+        }
+        return stadardDev;
+    }
+
+    //用来给ArrayList每个值取对数，以应用于对数正态运算的函数
+    private ArrayList<Double> GetLogarNormalList(ArrayList<Double> list){
+        ArrayList<Double> list1 = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++){
+            list1.add(Math.log( 0 - list.get(i)));
+        }
+        return list1;
+    }
+
 
     private double rssiToDis(double rssi){     //rssi到距离转化的函数
         Double directDistance = Math.pow(10.0, (rssi +52.393) / (-19.2));

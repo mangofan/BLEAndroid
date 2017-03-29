@@ -1,4 +1,7 @@
 package code.source.es.newbluetooth.Service;
+/*
+ * Created by fanwe on 2017/3/29.
+ */
 
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
@@ -13,10 +16,6 @@ import android.os.Message;
 import android.os.Messenger;
 import android.support.annotation.Nullable;
 
-/**
- * Created by zhb_z on 2016/10/27 0027.
- */
-
 public class ScanService extends Service {
     public static final String GET_BLUETOOTH_RSSI="GET_BLUETOOTH_RSSI";
     public static final int START_BLUETOOTH=0,STOP_BLUETOOTH=1,SET_A_N=2,SET_INTENTION=3;
@@ -24,13 +23,13 @@ public class ScanService extends Service {
     Messenger messenger=new Messenger(handler);
     boolean searchflag;
     String Intention=null;
-/*    double A,N;
-    {
-        double initA1 = -47;
-        double initA2 = -57;
-        A = Math.abs(initA1);
-        N = Math.log10((Math.abs(initA2) - A) / Math.log10(4));
-    }*/
+    /*    double A,N;
+        {
+            double initA1 = -47;
+            double initA2 = -57;
+            A = Math.abs(initA1);
+            N = Math.log10((Math.abs(initA2) - A) / Math.log10(4));
+        }*/
     final BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override

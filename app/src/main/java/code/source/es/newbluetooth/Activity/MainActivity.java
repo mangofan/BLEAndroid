@@ -1,14 +1,6 @@
 package code.source.es.newbluetooth.Activity;
 
-import android.bluetooth.BluetoothDevice;
-import android.content.BroadcastReceiver;
-import android.content.ComponentName;
-import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
-import android.hardware.Sensor;
-import android.hardware.SensorManager;
-import android.os.IBinder;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -17,10 +9,6 @@ import android.widget.Button;
 
 import code.source.es.newbluetooth.R;
 import code.source.es.newbluetooth.Service.ScanService;
-import code.source.es.newbluetooth.utils.FileCache;
-
-import static code.source.es.newbluetooth.R.id.cancel_action;
-import static code.source.es.newbluetooth.R.id.sensorButton;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
 

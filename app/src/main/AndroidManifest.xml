@@ -29,7 +29,7 @@
         </activity>
         <activity android:name=".Activity.ScanActivity" android:windowSoftInputMode="adjustUnspecified|stateHidden" />
         <activity android:name=".Activity.LineTestActivity" android:exported="true"/>
-        <service android:name=".Service.ScanService" />
+        <service android:name="com.example.fanwe.bluetoothlocation.Activity.Service.ScanService" />
         <activity android:name=".Activity.SensorActivity" >
         </activity>
 
